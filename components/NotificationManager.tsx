@@ -33,6 +33,10 @@ export function NotificationManager() {
     useEffect(() => {
         if ("Notification" in window) {
             setPermission(Notification.permission);
+            // If already granted, ensure subscription is synced to DB
+            if (Notification.permission === "granted") {
+                subscribeToPush();
+            }
         }
 
         if ('serviceWorker' in navigator) {
