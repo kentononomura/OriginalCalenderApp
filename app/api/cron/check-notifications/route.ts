@@ -7,13 +7,24 @@ const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY!;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT!;
 const CRON_SECRET = process.env.CRON_SECRET!;
 
-webpush.setVapidDetails(
-    VAPID_SUBJECT,
-    VAPID_PUBLIC_KEY,
-    VAPID_PRIVATE_KEY
-);
+export const dynamic = 'force-dynamic'; // Prevent static generation attempts
 
 export async function GET(request: NextRequest) {
+    try {
+        if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) {
+            console.error("VAPID keys are missing");
+            return new NextResponse('Server Configuration Error', { status: 500 });
+        }
+
+        webpush.setVapidDetails(
+            VAPID_SUBJECT,
+            VAPID_PUBLIC_KEY,
+            VAPID_PRIVATE_KEY
+        );
+    } catch (e) {
+        console.error("Failed to set VAPID details", e);
+        return new NextResponse('Configuration Error', { status: 500 });
+    }
     // 1. Authorization
     const authHeader = request.headers.get('authorization');
     if (authHeader !== `Bearer ${CRON_SECRET}`) {
