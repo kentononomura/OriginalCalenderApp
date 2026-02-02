@@ -54,9 +54,11 @@ export function NotificationManager() {
         setIsSubscribing(true);
         try {
             const registration = await navigator.serviceWorker.ready;
+            // Sanitize key on client side too
+            const cleanKey = VAPID_PUBLIC_KEY.replace(/[^a-zA-Z0-9-_]/g, '');
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                applicationServerKey: urlBase64ToUint8Array(cleanKey)
             });
 
             // Save subscription to Supabase via Server Action (to bypass RLS)

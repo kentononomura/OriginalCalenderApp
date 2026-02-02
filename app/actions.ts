@@ -253,7 +253,7 @@ export async function diagnoseNotificationSystem(): Promise<string> {
     if (!SERVICE_ROLE) report.push("[FAIL] SUPABASE_SERVICE_ROLE_KEY is missing");
     else report.push(`[OK] Service Role Key present`);
 
-    // 2. Check DB Connection
+    // 2. Check DB Connection & Write Capability
     try {
         const { createClient: createAdminClient } = await import('@supabase/supabase-js');
         const adminSupabase = createAdminClient(
@@ -263,10 +263,30 @@ export async function diagnoseNotificationSystem(): Promise<string> {
                 auth: { persistSession: false }
             }
         );
-        const { count, error } = await adminSupabase.from('push_subscriptions').select('*', { count: 'exact', head: true });
 
-        if (error) report.push(`[FAIL] DB Access: ${error.message}`);
+        // 2a. Read Check
+        const { count, error } = await adminSupabase.from('push_subscriptions').select('*', { count: 'exact', head: true });
+        if (error) report.push(`[FAIL] DB Access: ${error.message} (Code: ${error.code})`);
         else report.push(`[OK] DB Access confirmed (Total Subscriptions: ${count})`);
+
+        // 2b. Write Check (Probe)
+        if (!error) {
+            const { error: writeError } = await adminSupabase.from('push_subscriptions').insert({
+                user_id: "00000000-0000-0000-0000-000000000000", // Dummy UUID
+                endpoint: "https://example.com/test-probe-" + Date.now(),
+                p256dh: "test-key",
+                auth: "test-auth"
+            });
+
+            if (writeError) {
+                report.push(`[FAIL] DB Write Check: ${writeError.message} (Code: ${writeError.code})`);
+                report.push(`[HINT] Tables might be missing or RLS blocking Service Role (unlikely)`);
+            } else {
+                report.push(`[OK] DB Write Check passed (inserted dummy record)`);
+                // Cleanup
+                await adminSupabase.from('push_subscriptions').delete().eq('p256dh', 'test-key');
+            }
+        }
 
     } catch (e: any) {
         report.push(`[FAIL] DB Connection Exception: ${e.message}`);
