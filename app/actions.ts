@@ -154,6 +154,7 @@ export async function testPushNotification(): Promise<{ success: boolean; messag
     );
 
     let successCount = 0;
+    let lastError = "";
 
     for (const sub of subs) {
         try {
@@ -169,14 +170,15 @@ export async function testPushNotification(): Promise<{ success: boolean; messag
                 url: "/"
             }));
             successCount++;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Test push failed:", error);
+            lastError = error.message || JSON.stringify(error);
         }
     }
 
     if (successCount > 0) {
         return { success: true, message: `Sent ${successCount} notifications` };
     } else {
-        return { success: false, message: "Failed to send notifications" };
+        return { success: false, message: `Failed to send. Error: ${lastError}` };
     }
 }
