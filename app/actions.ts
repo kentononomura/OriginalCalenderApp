@@ -1,5 +1,6 @@
 "use server";
 
+import webpush from "web-push";
 import { Task, Priority } from "@/lib/types";
 import { createClient } from "@/utils/supabase/server";
 
@@ -125,4 +126,57 @@ export async function toggleTaskCompletionAction(id: string): Promise<Task | nul
         notificationTime: data.notification_time,
         createdAt: Number(data.created_at),
     };
+}
+
+export async function testPushNotification(): Promise<{ success: boolean; message: string }> {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return { success: false, message: "User not authenticated" };
+
+    const { data: subs } = await supabase
+        .from('push_subscriptions')
+        .select('*')
+        .eq('user_id', user.id);
+
+    if (!subs || subs.length === 0) {
+        return { success: false, message: "No subscription found" };
+    }
+
+    const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim()!;
+    const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY?.trim()!;
+    const VAPID_SUBJECT = process.env.VAPID_SUBJECT?.trim()!;
+
+    webpush.setVapidDetails(
+        VAPID_SUBJECT,
+        VAPID_PUBLIC_KEY,
+        VAPID_PRIVATE_KEY
+    );
+
+    let successCount = 0;
+
+    for (const sub of subs) {
+        try {
+            await webpush.sendNotification({
+                endpoint: sub.endpoint,
+                keys: {
+                    p256dh: atob(sub.p256dh),
+                    auth: atob(sub.auth)
+                }
+            }, JSON.stringify({
+                title: "サーバー通知テスト",
+                body: "これはサーバーから直接送信されたテスト通知です。",
+                url: "/"
+            }));
+            successCount++;
+        } catch (error) {
+            console.error("Test push failed:", error);
+        }
+    }
+
+    if (successCount > 0) {
+        return { success: true, message: `Sent ${successCount} notifications` };
+    } else {
+        return { success: false, message: "Failed to send notifications" };
+    }
 }

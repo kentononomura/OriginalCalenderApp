@@ -132,12 +132,29 @@ export function NotificationManager() {
             )}
 
             {permission === "granted" && (
-                <button
-                    onClick={sendTestNotification}
-                    className="bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-50 hover:opacity-100"
-                >
-                    テスト通知送信
-                </button>
+                <div className="flex flex-col gap-2 animate-fade-in">
+                    <button
+                        onClick={sendTestNotification}
+                        className="bg-gray-800 text-white text-xs px-3 py-2 rounded shadow opacity-70 hover:opacity-100 transition-opacity"
+                    >
+                        ローカル通知テスト
+                    </button>
+                    <button
+                        onClick={async () => {
+                            const { testPushNotification } = await import("@/app/actions");
+                            try {
+                                const result = await testPushNotification();
+                                alert(result.message);
+                            } catch (e) {
+                                console.error(e);
+                                alert("テスト送信に失敗しました");
+                            }
+                        }}
+                        className="bg-indigo-600 text-white text-xs px-3 py-2 rounded shadow hover:bg-indigo-700 transition-colors"
+                    >
+                        サーバー通知テスト
+                    </button>
+                </div>
             )}
         </div>
     );
