@@ -33,9 +33,9 @@ export function NotificationManager() {
     useEffect(() => {
         if ("Notification" in window) {
             setPermission(Notification.permission);
-            // If already granted, ensure subscription is synced to DB
+            // If already granted, ensure subscription is synced to DB (Silently)
             if (Notification.permission === "granted") {
-                subscribeToPush();
+                subscribeToPush(true);
             }
         }
 
@@ -50,7 +50,7 @@ export function NotificationManager() {
         }
     }, []);
 
-    const subscribeToPush = async () => {
+    const subscribeToPush = async (silent = false) => {
         setIsSubscribing(true);
         try {
             const registration = await navigator.serviceWorker.ready;
@@ -66,18 +66,22 @@ export function NotificationManager() {
             const result = await saveSubscription(JSON.parse(JSON.stringify(subscription)));
 
             if (!result.success) {
-                throw new Error(result.message);
+                console.error("Failed to save subscription:", result.message);
+                // Don't throw here if silent, just log it. 
+                // We don't want to break the app flow for a background sync.
+                if (!silent) throw new Error(result.message);
+            } else {
+                console.log("Subscription saved via server action");
+                if (!silent) {
+                    new Notification("通知設定完了", {
+                        body: "アプリを閉じていても通知が届くようになりました！",
+                        icon: "/icon.png"
+                    });
+                }
             }
-
-            console.log("Subscription saved via server action");
-            new Notification("通知設定完了", {
-                body: "アプリを閉じていても通知が届くようになりました！",
-                icon: "/icon.png"
-            });
         } catch (error) {
             console.error('Failed to subscribe to push:', error);
-            // Re-throw to be caught by the caller (Update Settings button)
-            throw error;
+            if (!silent) throw error;
         } finally {
             setIsSubscribing(false);
         }
@@ -135,58 +139,7 @@ export function NotificationManager() {
             )}
 
             {permission === "granted" && (
-                <div className="flex flex-col gap-2 animate-fade-in">
-                    <button
-                        onClick={async () => {
-                            try {
-                                await subscribeToPush();
-                                alert("設定を更新しました。もう一度サーバーテストを試してください。");
-                            } catch (e) {
-                                alert("設定更新エラー: " + (e as any).message);
-                            }
-                        }}
-                        className="bg-blue-600 text-white text-xs px-3 py-2 rounded shadow hover:bg-blue-700 transition-colors"
-                    >
-                        情報更新（解決用）
-                    </button>
-                    <button
-                        onClick={sendTestNotification}
-                        className="bg-gray-800 text-white text-xs px-3 py-2 rounded shadow opacity-70 hover:opacity-100 transition-opacity"
-                    >
-                        ローカル通知テスト
-                    </button>
-                    <button
-                        onClick={async () => {
-                            const { testPushNotification } = await import("@/app/actions");
-                            try {
-                                const result = await testPushNotification();
-                                alert(result.message);
-                            } catch (e) {
-                                console.error(e);
-                                alert("テスト送信に失敗しました");
-                            }
-                        }}
-                        className="bg-indigo-600 text-white text-xs px-3 py-2 rounded shadow hover:bg-indigo-700 transition-colors"
-                    >
-                        サーバー通知テスト
-                    </button>
-                    <button
-                        onClick={async () => {
-                            const { diagnoseNotificationSystem } = await import("@/app/actions");
-                            try {
-                                alert("システム診断を開始します...");
-                                const report = await diagnoseNotificationSystem();
-                                alert(report);
-                                console.log(report);
-                            } catch (e) {
-                                alert("診断エラー: " + (e as any).message);
-                            }
-                        }}
-                        className="bg-red-600 text-white text-xs px-3 py-2 rounded shadow hover:bg-red-700 transition-colors"
-                    >
-                        システム診断を実行
-                    </button>
-                </div>
+                <div className="hidden"></div>
             )}
         </div>
     );
