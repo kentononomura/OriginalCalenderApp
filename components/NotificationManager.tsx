@@ -138,6 +138,19 @@ export function NotificationManager() {
             {permission === "granted" && (
                 <div className="flex flex-col gap-2 animate-fade-in">
                     <button
+                        onClick={async () => {
+                            try {
+                                await subscribeToPush();
+                                alert("設定を更新しました。もう一度サーバーテストを試してください。");
+                            } catch (e) {
+                                alert("設定更新エラー: " + (e as any).message);
+                            }
+                        }}
+                        className="bg-blue-600 text-white text-xs px-3 py-2 rounded shadow hover:bg-blue-700 transition-colors"
+                    >
+                        情報更新（解決用）
+                    </button>
+                    <button
                         onClick={sendTestNotification}
                         className="bg-gray-800 text-white text-xs px-3 py-2 rounded shadow opacity-70 hover:opacity-100 transition-opacity"
                     >
