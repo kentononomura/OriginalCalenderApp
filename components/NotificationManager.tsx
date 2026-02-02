@@ -168,6 +168,22 @@ export function NotificationManager() {
                     >
                         サーバー通知テスト
                     </button>
+                    <button
+                        onClick={async () => {
+                            const { diagnoseNotificationSystem } = await import("@/app/actions");
+                            try {
+                                alert("システム診断を開始します...");
+                                const report = await diagnoseNotificationSystem();
+                                alert(report);
+                                console.log(report);
+                            } catch (e) {
+                                alert("診断エラー: " + (e as any).message);
+                            }
+                        }}
+                        className="bg-red-600 text-white text-xs px-3 py-2 rounded shadow hover:bg-red-700 transition-colors"
+                    >
+                        システム診断を実行
+                    </button>
                 </div>
             )}
         </div>

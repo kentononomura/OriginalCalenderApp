@@ -223,3 +223,55 @@ export async function saveSubscription(subscription: any): Promise<{ success: bo
 
     return { success: true, message: "Subscription saved successfully" };
 }
+
+export async function diagnoseNotificationSystem(): Promise<string> {
+    const report = [];
+    report.push("--- System Diagnosis ---");
+
+    // 1. Check Env Vars
+    const PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    const PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+    const SUBJECT = process.env.VAPID_SUBJECT;
+    const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!PUBLIC_KEY) report.push("[FAIL] NEXT_PUBLIC_VAPID_PUBLIC_KEY is missing");
+    else report.push(`[OK] Public Key present (Length: ${PUBLIC_KEY.length})`);
+
+    if (!PRIVATE_KEY) report.push("[FAIL] VAPID_PRIVATE_KEY is missing");
+    else report.push(`[OK] Private Key present (Length: ${PRIVATE_KEY.length})`);
+
+    if (!SUBJECT) report.push("[FAIL] VAPID_SUBJECT is missing");
+    else report.push(`[OK] Subject definition: ${SUBJECT}`);
+
+    if (!SERVICE_ROLE) report.push("[FAIL] SUPABASE_SERVICE_ROLE_KEY is missing");
+    else report.push(`[OK] Service Role Key present`);
+
+    // 2. Check DB Connection
+    try {
+        const { createClient: createAdminClient } = await import('@supabase/supabase-js');
+        const adminSupabase = createAdminClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            SERVICE_ROLE || "",
+            {
+                auth: { persistSession: false }
+            }
+        );
+        const { count, error } = await adminSupabase.from('push_subscriptions').select('*', { count: 'exact', head: true });
+
+        if (error) report.push(`[FAIL] DB Access: ${error.message}`);
+        else report.push(`[OK] DB Access confirmed (Total Subscriptions: ${count})`);
+
+    } catch (e: any) {
+        report.push(`[FAIL] DB Connection Exception: ${e.message}`);
+    }
+
+    // 3. Check VAPID Validity (Soft Check)
+    try {
+        webpush.setVapidDetails(SUBJECT || 'mailto:test@test.com', PUBLIC_KEY || '', PRIVATE_KEY || '');
+        report.push("[OK] VAPID keys accepted by web-push library");
+    } catch (e: any) {
+        report.push(`[FAIL] VAPID Key Error: ${e.message}`);
+    }
+
+    return report.join("\n");
+}
