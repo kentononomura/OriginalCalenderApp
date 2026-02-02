@@ -232,7 +232,8 @@ export async function saveSubscription(subscription: any): Promise<{ success: bo
 
 export async function diagnoseNotificationSystem(): Promise<string> {
     const report = [];
-    report.push("--- System Diagnosis ---");
+    const BUILD_TIMESTAMP = "2026-02-02 21:50 (Fix V3)"; // Update this manually to prove valid deployment
+    report.push(`--- System Diagnosis (Ver: ${BUILD_TIMESTAMP}) ---`);
 
     // 1. Check Env Vars
     const PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -277,6 +278,10 @@ export async function diagnoseNotificationSystem(): Promise<string> {
             .replace(/=/g, '')
             .replace(/\+/g, '-')
             .replace(/\//g, '_');
+
+        report.push(`[INFO] Raw Key Length: ${(PUBLIC_KEY || '').length}`);
+        report.push(`[INFO] Safe Key Length: ${safePublicKey.length}`);
+        report.push(`[INFO] Safe Key Start: ${safePublicKey.substring(0, 10)}...`);
 
         webpush.setVapidDetails(SUBJECT || 'mailto:test@test.com', safePublicKey, PRIVATE_KEY || '');
         report.push("[OK] VAPID keys accepted by web-push library");
