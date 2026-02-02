@@ -3,36 +3,96 @@
 import { useEffect, useState, useRef } from "react";
 import { useStore } from "@/lib/store";
 import { Task } from "@/lib/types";
-import { Bell, BellOff } from "lucide-react";
+import { Bell, BellOff, Loader2 } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
+
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
+
+function urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+        .replace(/\-/g, '+')
+        .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
 
 export function NotificationManager() {
     const { tasks } = useStore();
     const processedNotifications = useRef<Set<string>>(new Set());
     const [permission, setPermission] = useState<NotificationPermission>("default");
     const [showTestButton, setShowTestButton] = useState(false);
+    const [isSubscribing, setIsSubscribing] = useState(false);
 
     useEffect(() => {
         if ("Notification" in window) {
             setPermission(Notification.permission);
         }
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => {
+                    console.log('Service Worker registered with scope:', registration.scope);
+                })
+                .catch(error => {
+                    console.error('Service Worker registration failed:', error);
+                });
+        }
     }, []);
+
+    const subscribeToPush = async () => {
+        setIsSubscribing(true);
+        try {
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+            });
+
+            // Save subscription to Supabase
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (user) {
+                await supabase.from('push_subscriptions').upsert({
+                    user_id: user.id,
+                    endpoint: subscription.endpoint,
+                    p256dh: btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(subscription.getKey('p256dh')!)))),
+                    auth: btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(subscription.getKey('auth')!))))
+                }, { onConflict: 'endpoint' });
+
+                new Notification("通知設定完了", {
+                    body: "アプリを閉じていても通知が届くようになりました！",
+                    icon: "/icon.png"
+                });
+            }
+        } catch (error) {
+            console.error('Failed to subscribe to push:', error);
+            // alert("通知設定に失敗しました。"); // Optional: fail silently
+        } finally {
+            setIsSubscribing(false);
+        }
+    };
 
     const requestPermission = async () => {
         if (!("Notification" in window)) return;
         const result = await Notification.requestPermission();
         setPermission(result);
         if (result === "granted") {
-            new Notification("通知設定完了", {
-                body: "タスクの通知が届くようになりました！",
-                icon: "/icon.png"
-            });
+            await subscribeToPush();
         }
     };
 
     const sendTestNotification = () => {
         if (permission === "granted") {
             new Notification("テスト通知", {
-                body: "これはテスト通知です。正常に動作しています。",
+                body: "これはローカルテスト通知です。",
                 icon: "/icon.png"
             });
         }
@@ -44,7 +104,7 @@ export function NotificationManager() {
 
         const intervalId = setInterval(() => {
             checkNotifications(tasks, processedNotifications.current);
-        }, 30000); // Check every 30 seconds for better responsiveness
+        }, 30000);
 
         return () => clearInterval(intervalId);
     }, [tasks]);
@@ -56,9 +116,10 @@ export function NotificationManager() {
             {permission === "default" && (
                 <button
                     onClick={requestPermission}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg hover:bg-blue-700 transition-colors animate-bounce"
+                    disabled={isSubscribing}
+                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg hover:bg-blue-700 transition-colors animate-bounce disabled:opacity-70"
                 >
-                    <Bell className="h-4 w-4" />
+                    {isSubscribing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
                     通知を有効にする
                 </button>
             )}
@@ -70,7 +131,6 @@ export function NotificationManager() {
                 </div>
             )}
 
-            {/* Hidden trigger for test button (triple click logic or similar could be better, but simple toggle for now) */}
             {permission === "granted" && (
                 <button
                     onClick={sendTestNotification}
@@ -89,25 +149,15 @@ function checkNotifications(tasks: Task[], processed: Set<string>) {
     }
 
     const now = new Date();
-    // Normalize to minute precision for comparison
-    const currentMinuteIso = now.toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm
+    const currentMinuteIso = now.toISOString().slice(0, 16);
 
     tasks.forEach(task => {
         if (!task.notificationTime || task.isCompleted) return;
 
         const taskTime = new Date(task.notificationTime);
         const taskMinuteIso = taskTime.toISOString().slice(0, 16);
-
-        // Key for deduplication
         const notificationKey = `${task.id}-${taskMinuteIso}`;
-
-        // Check if it's time (within the same minute) and not already processed
-        // We also check if the time has passed but is within last 5 minutes (in case user opened app late)
-        // For now, let's keep it strictly locally to the minute or just passed
         const timeDiff = now.getTime() - taskTime.getTime();
-
-        // 0 <= timeDiff < 60000 means "it is happening now or just happened within last minute"
-        // Also allow matching strings directly for exact minute precision issues
         const isTime = (timeDiff >= 0 && timeDiff < 60000) || currentMinuteIso === taskMinuteIso;
 
         if (isTime && !processed.has(notificationKey)) {
