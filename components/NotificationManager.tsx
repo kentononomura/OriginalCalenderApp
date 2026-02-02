@@ -1,40 +1,90 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useStore } from "@/lib/store";
-import { format } from "date-fns";
 import { Task } from "@/lib/types";
+import { Bell, BellOff } from "lucide-react";
 
 export function NotificationManager() {
-    const { tasks, fetchTasks } = useStore();
-    // Use a ref to track processed notifications to avoid duplicate alerts in strict mode / re-renders
-    // Using a simple set of strings key: "taskId-notificationTime"
+    const { tasks } = useStore();
     const processedNotifications = useRef<Set<string>>(new Set());
+    const [permission, setPermission] = useState<NotificationPermission>("default");
+    const [showTestButton, setShowTestButton] = useState(false);
 
-    // Request permission on mount (or first interaction)
     useEffect(() => {
-        if ("Notification" in window && Notification.permission === "default") {
-            Notification.requestPermission();
+        if ("Notification" in window) {
+            setPermission(Notification.permission);
         }
     }, []);
 
+    const requestPermission = async () => {
+        if (!("Notification" in window)) return;
+        const result = await Notification.requestPermission();
+        setPermission(result);
+        if (result === "granted") {
+            new Notification("通知設定完了", {
+                body: "タスクの通知が届くようになりました！",
+                icon: "/icon.png"
+            });
+        }
+    };
+
+    const sendTestNotification = () => {
+        if (permission === "granted") {
+            new Notification("テスト通知", {
+                body: "これはテスト通知です。正常に動作しています。",
+                icon: "/icon.png"
+            });
+        }
+    };
+
     // Check for notifications every minute
     useEffect(() => {
-        // Run immediately on mount/update
         checkNotifications(tasks, processedNotifications.current);
 
         const intervalId = setInterval(() => {
             checkNotifications(tasks, processedNotifications.current);
-        }, 60000); // Check every minute
+        }, 30000); // Check every 30 seconds for better responsiveness
 
         return () => clearInterval(intervalId);
     }, [tasks]);
 
-    return null; // This component does not render anything visually
+    if (permission === "granted" && !showTestButton) return null;
+
+    return (
+        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+            {permission === "default" && (
+                <button
+                    onClick={requestPermission}
+                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg hover:bg-blue-700 transition-colors animate-bounce"
+                >
+                    <Bell className="h-4 w-4" />
+                    通知を有効にする
+                </button>
+            )}
+
+            {permission === "denied" && (
+                <div className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-full shadow-lg">
+                    <BellOff className="h-4 w-4" />
+                    通知がブロックされています
+                </div>
+            )}
+
+            {/* Hidden trigger for test button (triple click logic or similar could be better, but simple toggle for now) */}
+            {permission === "granted" && (
+                <button
+                    onClick={sendTestNotification}
+                    className="bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-50 hover:opacity-100"
+                >
+                    テスト通知送信
+                </button>
+            )}
+        </div>
+    );
 }
 
 function checkNotifications(tasks: Task[], processed: Set<string>) {
-    if (!("Notification" in window) || Notification.permission !== "granted") {
+    if (typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") {
         return;
     }
 
@@ -69,15 +119,10 @@ function checkNotifications(tasks: Task[], processed: Set<string>) {
 
 function sendNotification(task: Task) {
     try {
-        // Mobile browsers might require a service worker for background notifications,
-        // but for an open PWA/web page, this works while the page is open.
-        // For true background push notifications on mobile, simpler Web Push API + Service Worker is needed.
-        // This implementation focuses on the active/background tab use case first.
-
         const notification = new Notification(`タスクの時間です: ${task.title}`, {
             body: task.description || "開始時間になりました。",
-            icon: "/icon.png", // Assuming icon exists, or use default
-            tag: task.id, // Replace existing notification for same task if any
+            icon: "/icon.png",
+            tag: task.id,
         });
 
         notification.onclick = () => {
