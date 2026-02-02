@@ -59,26 +59,23 @@ export function NotificationManager() {
                 applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
             });
 
-            // Save subscription to Supabase
-            const supabase = createClient();
-            const { data: { user } } = await supabase.auth.getUser();
+            // Save subscription to Supabase via Server Action (to bypass RLS)
+            const { saveSubscription } = await import("@/app/actions");
+            const result = await saveSubscription(JSON.parse(JSON.stringify(subscription)));
 
-            if (user) {
-                await supabase.from('push_subscriptions').upsert({
-                    user_id: user.id,
-                    endpoint: subscription.endpoint,
-                    p256dh: btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(subscription.getKey('p256dh')!)))),
-                    auth: btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(subscription.getKey('auth')!))))
-                }, { onConflict: 'endpoint' });
-
-                new Notification("通知設定完了", {
-                    body: "アプリを閉じていても通知が届くようになりました！",
-                    icon: "/icon.png"
-                });
+            if (!result.success) {
+                throw new Error(result.message);
             }
+
+            console.log("Subscription saved via server action");
+            new Notification("通知設定完了", {
+                body: "アプリを閉じていても通知が届くようになりました！",
+                icon: "/icon.png"
+            });
         } catch (error) {
             console.error('Failed to subscribe to push:', error);
-            // alert("通知設定に失敗しました。"); // Optional: fail silently
+            // Re-throw to be caught by the caller (Update Settings button)
+            throw error;
         } finally {
             setIsSubscribing(false);
         }

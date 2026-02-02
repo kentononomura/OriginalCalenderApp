@@ -182,3 +182,44 @@ export async function testPushNotification(): Promise<{ success: boolean; messag
         return { success: false, message: `Failed to send. Error: ${lastError}` };
     }
 }
+
+export async function saveSubscription(subscription: any): Promise<{ success: boolean; message: string }> {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+        return { success: false, message: "User not authenticated" };
+    }
+
+    // Use Service Role Key for Admin Access to bypass RLS
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+    if (!SUPABASE_SERVICE_ROLE_KEY) {
+        return { success: false, message: "Server misconfiguration: No Service Role Key" };
+    }
+
+    const { createClient: createAdminClient } = await import('@supabase/supabase-js');
+    const adminSupabase = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        SUPABASE_SERVICE_ROLE_KEY,
+        {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        }
+    );
+
+    const { error } = await adminSupabase.from('push_subscriptions').upsert({
+        user_id: user.id,
+        endpoint: subscription.endpoint,
+        p256dh: btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(subscription.keys.p256dh)))),
+        auth: btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(subscription.keys.auth))))
+    }, { onConflict: 'endpoint' });
+
+    if (error) {
+        console.error("Failed to save subscription:", error);
+        return { success: false, message: "Database Error: " + error.message };
+    }
+
+    return { success: true, message: "Subscription saved successfully" };
+}
