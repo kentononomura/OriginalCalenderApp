@@ -147,16 +147,16 @@ export async function testPushNotification(): Promise<{ success: boolean; messag
     const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY?.trim()!;
     const VAPID_SUBJECT = process.env.VAPID_SUBJECT?.trim()!;
 
-    // Sanitize Public Key: Remove padding and ensure URL-safe characters
-    const safePublicKey = VAPID_PUBLIC_KEY
-        .replace(/=/g, '')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_');
+    // Sanitize Keys: Aggressively remove anything that isn't a valid Base64URL character
+    const cleanKey = (key: string) => key.replace(/[^a-zA-Z0-9-_]/g, '');
+
+    const safePublicKey = cleanKey(VAPID_PUBLIC_KEY);
+    const safePrivateKey = cleanKey(VAPID_PRIVATE_KEY);
 
     webpush.setVapidDetails(
         VAPID_SUBJECT,
         safePublicKey,
-        VAPID_PRIVATE_KEY
+        safePrivateKey
     );
 
     let successCount = 0;
@@ -272,21 +272,28 @@ export async function diagnoseNotificationSystem(): Promise<string> {
         report.push(`[FAIL] DB Connection Exception: ${e.message}`);
     }
 
-    // 3. Check VAPID Validity (Soft Check)
+    // 3. Check VAPID Validity (Deep Check)
     try {
-        const safePublicKey = (PUBLIC_KEY || '')
-            .replace(/=/g, '')
-            .replace(/\+/g, '-')
-            .replace(/\//g, '_');
+        const cleanKey = (key: string) => key.replace(/[^a-zA-Z0-9-_]/g, '');
 
-        report.push(`[INFO] Raw Key Length: ${(PUBLIC_KEY || '').length}`);
-        report.push(`[INFO] Safe Key Length: ${safePublicKey.length}`);
-        report.push(`[INFO] Safe Key Start: ${safePublicKey.substring(0, 10)}...`);
+        const rawPublic = PUBLIC_KEY || '';
+        const safePublicKey = cleanKey(rawPublic);
 
-        webpush.setVapidDetails(SUBJECT || 'mailto:test@test.com', safePublicKey, PRIVATE_KEY || '');
-        report.push("[OK] VAPID keys accepted by web-push library");
+        const rawPrivate = PRIVATE_KEY || '';
+        const safePrivateKey = cleanKey(rawPrivate);
+
+        report.push(`[INFO] Raw Public Key Length: ${rawPublic.length}`);
+        report.push(`[INFO] Clean Public Key Length: ${safePublicKey.length}`);
+
+        if (rawPublic.length !== safePublicKey.length) {
+            report.push(`[WARN] Hidden characters detected! Removed ${rawPublic.length - safePublicKey.length} chars.`);
+        }
+
+        webpush.setVapidDetails(SUBJECT || 'mailto:test@test.com', safePublicKey, safePrivateKey);
+        report.push("[OK] VAPID configuration valid with cleaned keys");
+
     } catch (e: any) {
-        report.push(`[FAIL] VAPID Key Error: ${e.message}`);
+        report.push(`[FAIL] VAPID Key Error (even after cleaning): ${e.message}`);
     }
 
     return report.join("\n");

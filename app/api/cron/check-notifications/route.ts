@@ -28,16 +28,13 @@ export async function GET(request: NextRequest) {
             return new NextResponse('Server Configuration Error: Service Role Key missing', { status: 500 });
         }
 
-        // Sanitize Public Key
-        const safePublicKey = VAPID_PUBLIC_KEY
-            .replace(/=/g, '')
-            .replace(/\+/g, '-')
-            .replace(/\//g, '_');
+        // Sanitize Keys: Aggressively remove anything that isn't a valid Base64URL character
+        const cleanKey = (key: string) => key.replace(/[^a-zA-Z0-9-_]/g, '');
 
         webpush.setVapidDetails(
             VAPID_SUBJECT,
-            safePublicKey,
-            VAPID_PRIVATE_KEY
+            cleanKey(VAPID_PUBLIC_KEY),
+            cleanKey(VAPID_PRIVATE_KEY)
         );
 
         // 2. Init Admin Client (Bypass RLS)
