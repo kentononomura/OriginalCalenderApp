@@ -93,8 +93,8 @@ export async function GET(request: NextRequest) {
                     await webpush.sendNotification({
                         endpoint: sub.endpoint,
                         keys: {
-                            p256dh: atob(sub.p256dh),
-                            auth: atob(sub.auth)
+                            p256dh: sub.p256dh,
+                            auth: sub.auth
                         }
                     }, JSON.stringify({
                         title: `タスクの時間です: ${task.content}`,

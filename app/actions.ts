@@ -161,8 +161,8 @@ export async function testPushNotification(): Promise<{ success: boolean; messag
             await webpush.sendNotification({
                 endpoint: sub.endpoint,
                 keys: {
-                    p256dh: atob(sub.p256dh),
-                    auth: atob(sub.auth)
+                    p256dh: sub.p256dh,
+                    auth: sub.auth
                 }
             }, JSON.stringify({
                 title: "サーバー通知テスト",
@@ -212,8 +212,8 @@ export async function saveSubscription(subscription: any): Promise<{ success: bo
     const { error } = await adminSupabase.from('push_subscriptions').upsert({
         user_id: user.id,
         endpoint: subscription.endpoint,
-        p256dh: btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(subscription.keys.p256dh)))),
-        auth: btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(subscription.keys.auth))))
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth
     }, { onConflict: 'endpoint' });
 
     if (error) {
