@@ -147,9 +147,15 @@ export async function testPushNotification(): Promise<{ success: boolean; messag
     const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY?.trim()!;
     const VAPID_SUBJECT = process.env.VAPID_SUBJECT?.trim()!;
 
+    // Sanitize Public Key: Remove padding and ensure URL-safe characters
+    const safePublicKey = VAPID_PUBLIC_KEY
+        .replace(/=/g, '')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_');
+
     webpush.setVapidDetails(
         VAPID_SUBJECT,
-        VAPID_PUBLIC_KEY,
+        safePublicKey,
         VAPID_PRIVATE_KEY
     );
 
@@ -267,7 +273,12 @@ export async function diagnoseNotificationSystem(): Promise<string> {
 
     // 3. Check VAPID Validity (Soft Check)
     try {
-        webpush.setVapidDetails(SUBJECT || 'mailto:test@test.com', PUBLIC_KEY || '', PRIVATE_KEY || '');
+        const safePublicKey = (PUBLIC_KEY || '')
+            .replace(/=/g, '')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_');
+
+        webpush.setVapidDetails(SUBJECT || 'mailto:test@test.com', safePublicKey, PRIVATE_KEY || '');
         report.push("[OK] VAPID keys accepted by web-push library");
     } catch (e: any) {
         report.push(`[FAIL] VAPID Key Error: ${e.message}`);

@@ -28,9 +28,15 @@ export async function GET(request: NextRequest) {
             return new NextResponse('Server Configuration Error: Service Role Key missing', { status: 500 });
         }
 
+        // Sanitize Public Key
+        const safePublicKey = VAPID_PUBLIC_KEY
+            .replace(/=/g, '')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_');
+
         webpush.setVapidDetails(
             VAPID_SUBJECT,
-            VAPID_PUBLIC_KEY,
+            safePublicKey,
             VAPID_PRIVATE_KEY
         );
 
