@@ -49,13 +49,19 @@ export async function GET(request: NextRequest) {
 
         // 3. Get current time (UTC minute precision)
         const now = new Date();
-        const currentMinuteIso = now.toISOString().slice(0, 16);
+        // Calculate start and end of minute
+        now.setSeconds(0, 0);
+        const startOfMinuteIso = now.toISOString(); // e.g., ...:00.000Z
+
+        now.setSeconds(59, 999);
+        const endOfMinuteIso = now.toISOString();   // e.g., ...:59.999Z
 
         // 4. Find tasks
         const { data: tasks, error: tasksError } = await supabase
             .from('tasks')
             .select('*')
-            .eq('notification_time', currentMinuteIso)
+            .gte('notification_time', startOfMinuteIso)
+            .lte('notification_time', endOfMinuteIso)
             .eq('is_completed', false);
 
         if (tasksError) {
