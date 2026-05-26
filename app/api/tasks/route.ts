@@ -53,8 +53,8 @@ export async function GET(request: Request) {
 
     // 2. ユーザーログイン認証を実行（これによりこのクライアントのセキュリティコンテキストがユーザーのものになる）
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password
+        email: email as string,
+        password: password as string
     });
 
     if (authError || !authData.user) {
@@ -78,17 +78,16 @@ export async function GET(request: Request) {
     }
 
     // 4. 指定された日付、または本日のJST日付を取得
-    let targetDateStr = targetDateParam;
-    if (!targetDateStr || !/^\d{4}-\d{2}-\d{2}$/.test(targetDateStr)) {
-        targetDateStr = getJstDateString(new Date());
-    }
+    const targetDateStr = (targetDateParam && /^\d{4}-\d{2}-\d{2}$/.test(targetDateParam))
+        ? targetDateParam
+        : getJstDateString(new Date());
 
     // 5. 日付に基づいたタスクのフィルタリング
     // タスクの開始日 <= 対象日 <= タスクの終了日 のタスクを本日のタスクとする
     const todayTasksRaw = tasks.filter((t: any) => {
         const startStr = getJstDateString(new Date(t.start_time));
         const endStr = getJstDateString(new Date(t.end_time));
-        return targetDateStr! >= startStr && targetDateStr! <= endStr;
+        return targetDateStr >= startStr && targetDateStr <= endStr;
     });
 
     // 6. 優先度順（HIGH -> MEDIUM -> LOW）にソート
